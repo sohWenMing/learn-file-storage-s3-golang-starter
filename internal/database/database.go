@@ -11,6 +11,8 @@ type Client struct {
 	db *sql.DB
 }
 
+// the Client is just a way to make the database connection to the config - uses the standard go sql.Open command, with the sqlite driver
+
 func NewClient(pathToDB string) (Client, error) {
 	db, err := sql.Open("sqlite3", pathToDB)
 	if err != nil {
@@ -26,6 +28,12 @@ func NewClient(pathToDB string) (Client, error) {
 }
 
 func (c *Client) autoMigrate() error {
+	/*
+		three migration commands, each is run through the exec function. this is run in the NewClient method, which is in turn run in the main
+		function where the connection is made through
+		db, err := database.NewClient(pathToDB)
+		if no err, db is the connected to the apiConfig in the main function
+	*/
 	userTable := `
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,

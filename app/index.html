@@ -72,6 +72,9 @@
         </div>
 
         <div id="video-upload-forms">
+          <!-- within this div are two forms that are for uploading the thumbnail and video, each with their own button -->
+          
+          <!-- form for uploading of thumbnails -->
           <form
             id="thumbnail-upload-form"
             onsubmit="event.preventDefault(); uploadThumbnail(currentVideo?.id)"
@@ -86,7 +89,8 @@
             <button type="submit" id="upload-thumbnail-btn">Upload</button>
             <img id="thumbnail-image" style="display: block" />
           </form>
-
+          
+          <!-- form for uploading of the actual video -->
           <div id="video-container">
             <form
               id="video-file-upload-form"
