@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -46,7 +49,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "problem with parsing of form", parseErr)
 		return
 	}
-	file, header, err := r.FormFile("thumbnail")
+	file, fileHeader, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "problem with parsing of form", err)
 		return
@@ -54,6 +57,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	/*
 		header that is returned from FormFile is of type multiPart.FileHeader
 		FileHeader itself as Header filed which is of type textproto.MIMEheader which is essentially a map of key value pairs
+
+		### the MIMEtype of each file will be stored in the file header (which is in fileHeader in the above example)
 	*/
 	video, err := cfg.db.GetVideo(videoID)
 	// getting the data in the database relating to the error
@@ -68,14 +73,33 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	//checks to see if the user logged in has accesst to the video, if not returns unauthorized error
 
-	mediaType := header.Header.Get("Content-Type")
-
-	data, err := io.ReadAll(file)
+	mediaType := fileHeader.Header.Get("Content-Type")
+	fmt.Printf("mediatype: %s\n", mediaType)
+	fileExtension, err := getExtensionFromImgMediaType(mediaType)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "error reading file", err)
+		respondWithError(w, http.StatusInternalServerError, "file type not valid", err)
 		return
 	}
-	updatedThumbnailURL := generateThumbnailURL(cfg, videoIDString)
+	// data, err := io.ReadAll(file)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusInternalServerError, "error reading file", err)
+	// 	return
+	// }
+	fileName := fmt.Sprintf("%s.%s", videoIDString, fileExtension)
+	fullFilePath := filepath.Join(cfg.assetsRoot, fileName)
+	fmt.Printf("cfg.assetsRoot: %s\n", cfg.assetsRoot)
+	fmt.Printf("fullFilePath: %s\n", fullFilePath)
+	fileToDisk, err := os.Create(fullFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error writing file", err)
+		return
+	}
+	defer fileToDisk.Close()
+
+	io.Copy(fileToDisk, file)
+
+	updatedThumbnailURL := generateFileUrl(cfg.port, videoIDString, fileExtension)
+	fmt.Printf("updatedThumbnailURL: %s\n", updatedThumbnailURL)
 	video.ThumbnailURL = &updatedThumbnailURL
 	dbErr := cfg.db.UpdateVideo(video)
 	if dbErr != nil {
@@ -83,13 +107,28 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	videoThumbnails[videoID] = thumbnail{
-		data:      data,
-		mediaType: mediaType,
-	}
+	// videoThumbnails[videoID] = thumbnail{
+	// 	data:      data,
+	// 	mediaType: mediaType,
+	// }
+
 	respondWithJSON(w, http.StatusOK, video)
 }
 
-func generateThumbnailURL(cfg *apiConfig, videoId string) string {
-	return fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoId)
+//	func generateDataURL(mediaType string, dataBase64 string) string {
+//		return fmt.Sprintf("data:%s;base64,%s", mediaType, dataBase64)
+//	}
+func generateFileUrl(port string, videoID string, fileExtension string) string {
+	return fmt.Sprintf("http://localhost:%s/assets/%s.%s",
+		port,
+		videoID,
+		fileExtension,
+	)
+}
+
+func getExtensionFromImgMediaType(mediaTypeString string) (string, error) {
+	if !strings.HasPrefix(mediaTypeString, "image/") {
+		return "", errors.New("media type is not an image")
+	}
+	return strings.TrimPrefix(mediaTypeString, "image/"), nil
 }
