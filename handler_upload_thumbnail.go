@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,8 +74,12 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	//checks to see if the user logged in has accesst to the video, if not returns unauthorized error
 
-	mediaType := fileHeader.Header.Get("Content-Type")
-	fmt.Printf("mediatype: %s\n", mediaType)
+	mediaType, err := parseMediaType(fileHeader.Header.Get("Content-Type"))
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "file type not valid", err)
+		return
+	}
 	fileExtension, err := getExtensionFromImgMediaType(mediaType)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "file type not valid", err)
@@ -131,4 +136,12 @@ func getExtensionFromImgMediaType(mediaTypeString string) (string, error) {
 		return "", errors.New("media type is not an image")
 	}
 	return strings.TrimPrefix(mediaTypeString, "image/"), nil
+}
+
+func parseMediaType(header string) (mediatype string, err error) {
+	mediaType, _, err := mime.ParseMediaType(header)
+	if err != nil {
+		return "", err
+	}
+	return mediaType, nil
 }
